@@ -1,0 +1,112 @@
+import sys
+import gi
+gi.require_version('Adw', '1')
+gi.require_version('Gtk', '4.0')
+from gi.repository import Adw, Gio, GObject, Gtk
+
+class DropDown(GObject.Object):
+    __gtype_name__ = 'Widget'
+
+    def __init__(self, name):
+        super().__init__()
+        self._name = name
+        
+    @GObject.Property
+    def name(self):
+        return self._name
+
+class MainWindow(Gtk.ApplicationWindow):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.app_ = self.get_application()
+        self.search_text_method = ''
+        self.main_vertical_box = Gtk.Box.new( Gtk.Orientation.VERTICAL,5)
+        self.set_child(self.main_vertical_box)
+
+        data_to_show = ["Color favorito",
+                         "Rosado",
+                         "Verde",
+                         "Azul",
+                         "Rojo",
+                         "Amarillo",
+                         "Negro",
+                         "Blanco"]
+        
+        self.dropdown_model = Gio.ListStore(item_type=DropDown)
+        self.sort_model_widget  = Gtk.SortListModel(model=self.dropdown_model) # FIXME: Gtk.Sorter?
+        self.filter_model_widget = Gtk.FilterListModel(model=self.sort_model_widget)
+        self.filter_widget = Gtk.CustomFilter.new(self._do_filter_method_view, self.filter_model_widget)
+        self.filter_model_widget.set_filter(self.filter_widget)
+        for names in data_to_show:
+            self.dropdown_model.append(DropDown(name=names))
+        dropdown_factory = Gtk.SignalListItemFactory()
+        dropdown_factory.connect("setup", self._on_dropdown_factory_setup)
+        dropdown_factory.connect("bind", self._on_dropdown_factory_bind)
+
+        self.dropdown = Gtk.DropDown(model=self.dropdown_model, factory=dropdown_factory)
+        
+        self.dropdown.set_enable_search(True)
+        self.dropdown.connect("notify::selected-item", self._on_selected_widget)
+        self.main_vertical_box.append(self.dropdown)
+
+        search_entry_widget = self._get_search_entry_widget(self.dropdown)
+        search_entry_widget.connect('search-changed', self._on_search_method_changed)
+
+        print_button = Gtk.Button.new()
+        print_button.props.label = "Imprimir texto Combobox"
+        print_button.connect("clicked",self.on_print_button_clicked,self.dropdown)
+        self.main_vertical_box.append(print_button)
+
+    def _on_selected_widget(self, dropdown, data):
+        i = dropdown.get_selected_item()._name
+
+    def _get_search_entry_widget(self, dropdown):
+        popover = dropdown.get_last_child()
+        box = popover.get_child()
+        box2 = box.get_first_child()
+        search_entry = box2.get_first_child() # Gtk.SearchEntry
+        return search_entry
+    
+    def _on_dropdown_factory_setup(self, factory, list_item):
+        box = Gtk.Box(spacing=50, orientation=Gtk.Orientation.HORIZONTAL)
+        label = Gtk.Label()
+        box.append(label)
+        list_item.set_child(box)
+
+    def _on_dropdown_factory_bind(self, factory, list_item):
+        box = list_item.get_child()
+        label = box.get_first_child()
+        method = list_item.get_item()
+        label.set_text(method.name)
+
+    def on_print_button_clicked(self,p_button, dropdown):
+        print(dropdown.get_selected_item()._name)
+
+    def _on_search_method_changed(self, search_entry):
+        self.search_text_method = search_entry.get_text()
+        self.filter_method.changed(Gtk.FilterChange.DIFFERENT)
+    
+    def _on_search_widget_changed(self, search_entry):
+        self.search_text_widget = search_entry.get_text()
+        self.filter_widget.changed(Gtk.FilterChange.DIFFERENT)
+    
+    def _do_filter_widget_view(self, item, filter_list_model):
+        return self.search_text_widget.upper() in item.name.upper()
+
+    def _do_filter_method_view(self, item, filter_list_model):
+        return self.search_text_method.upper() in item.name.upper()
+
+class MyApp(Gtk.Application):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def do_activate(self):
+        active_window = self.props.active_window
+        if active_window:
+            active_window.present()
+        else:
+            self.win = MainWindow(application=self)
+            self.win.present()
+
+app = MyApp(application_id="com.myapplicationexample",flags= Gio.ApplicationFlags.FLAGS_NONE)
+app.run(sys.argv)
